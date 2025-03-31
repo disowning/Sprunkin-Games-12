@@ -1,0 +1,20 @@
+version: '3'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=mysql://root:mysql_jYAwsS@207.211.179.194:3306/jx099?connection_limit=5&pool_timeout=2&charset=utf8mb4_unicode_ci&max_allowed_packet=16777216
+      - NEXTAUTH_SECRET=8KQzp2nx893KJFmxnv6uqwerty12378HOPxmMs4
+      - NEXTAUTH_URL=http://jx099.com
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    restart: always
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge 

@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model account {
+  id                String  @id
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              user    @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Account_userId_fkey")
+
+  @@unique([provider, providerAccountId], map: "Account_provider_providerAccountId_key")
+  @@index([userId], map: "Account_userId_fkey")
+}
+
+model advertisement {
+  id        String    @id
+  name      String
+  location  String
+  adType    String
+  adCode    String
+  isActive  Boolean   @default(true)
+  order     Int       @default(0)
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime
+}
+
+model category {
+  id        String   @id
+  name      String   @unique(map: "Category_name_key")
+  slug      String   @unique(map: "Category_slug_key")
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model domainbinding {
+  id        String   @id
+  domain    String   @unique(map: "DomainBinding_domain_key")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model game {
+  id           String       @id @default(uuid())
+  title        String
+  slug         String       @unique(map: "Game_slug_key")
+  description  String       @db.Text
+  instructions String
+  thumbnailUrl String
+  gameUrl      String
+  views        Int          @default(0)
+  isSticky     Boolean      @default(false)
+  stickyOrder  Int          @default(0)
+  stickyUntil  DateTime?
+  category     String       @default("未分类")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  gameplay     gameplay[]
+  gamereview   gamereview[]
+  tag          tag[]        @relation("gametotag")
+  user         user[]       @relation("userfavorites")
+}
+
+model gameplay {
+  id          String   @id
+  gameId      String
+  userId      String?
+  sessionId   String
+  ipAddress   String
+  country     String?
+  city        String?
+  deviceType  String?
+  browserInfo String?
+  duration    Int?
+  playedAt    DateTime @default(now())
+  game        game     @relation(fields: [gameId], references: [id], onDelete: Cascade, map: "GamePlay_gameId_fkey")
+  user        user?    @relation(fields: [userId], references: [id], map: "GamePlay_userId_fkey")
+
+  @@index([gameId], map: "GamePlay_gameId_fkey")
+  @@index([userId], map: "GamePlay_userId_fkey")
+}
+
+model gamereview {
+  id        String   @id
+  content   String
+  rating    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  gameId    String
+  userId    String
+  game      game     @relation(fields: [gameId], references: [id], onDelete: Cascade, map: "GameReview_gameId_fkey")
+  user      user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "GameReview_userId_fkey")
+
+  @@index([gameId], map: "GameReview_gameId_fkey")
+  @@index([userId], map: "GameReview_userId_fkey")
+}
+
+model navitem {
+  id        String   @id
+  title     String
+  path      String
+  order     Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model session {
+  id           String   @id
+  sessionToken String   @unique(map: "Session_sessionToken_key")
+  userId       String
+  expires      DateTime
+  user         user     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "Session_userId_fkey")
+
+  @@index([userId], map: "Session_userId_fkey")
+}
+
+model siteconfig {
+  id        String   @id @default(uuid())
+  key       String   @unique(map: "SiteConfig_key_key")
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model sitesettings {
+  id        String   @id
+  key       String   @unique(map: "SiteSettings_key_key")
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model subscription {
+  id        String   @id
+  email     String   @unique(map: "Subscription_email_key")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+}
+
+model tag {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  games     game[]   @relation("gametotag")
+}
+
+model user {
+  id           String       @id @default(uuid())
+  name         String
+  email        String       @unique
+  password     String
+  role         String       @default("USER")
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  favorites    game[]       @relation("userfavorites")
+  gameplay     gameplay[]
+  gamereview   gamereview[]
+  accounts     account[]
+  sessions     session[]
+}
+
+model verificationtoken {
+  identifier String
+  token      String   @unique(map: "VerificationToken_token_key")
+  expires    DateTime
+
+  @@unique([identifier, token], map: "VerificationToken_identifier_token_key")
+}
+
+model visitorcountry {
+  id          String   @id
+  countryCode String   @unique(map: "VisitorCountry_countryCode_key")
+  countryName String
+  visits      Int      @default(1)
+  lastVisitAt DateTime @default(now())
+}
