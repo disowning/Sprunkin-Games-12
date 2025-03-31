@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - DATABASE_URL=mysql://root:mysql_jYAwsS@207.211.179.194:3306/jx099?connection_limit=5&pool_timeout=2&charset=utf8mb4_unicode_ci&max_allowed_packet=16777216
+      - DATABASE_URL=mysql://jx099.com:exir32ps7XATcFz8@1Panel-mysql-oh7c:3306/jx099.com
       - NEXTAUTH_SECRET=8KQzp2nx893KJFmxnv6uqwerty12378HOPxmMs4
       - NEXTAUTH_URL=http://jx099.com
     volumes:

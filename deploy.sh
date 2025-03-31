@@ -1,162 +1,192 @@
 #!/bin/bash
 
-# Sprunkin 游戏平台 - 1Panel 部署脚本
+# 设置错误时退出
+set -e
 
-# 默认配置文件
-COMPOSE_FILE="docker-compose.yml"
+# 定义颜色
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
 
-# 处理命令行参数
-while getopts ":f:" opt; do
-  case $opt in
-    f)
-      COMPOSE_FILE="$OPTARG"
-      ;;
-    \?)
-      echo "无效选项: -$OPTARG"
-      exit 1
-      ;;
-    :)
-      echo "选项 -$OPTARG 需要一个参数."
-      exit 1
-      ;;
-  esac
-done
+# 打印带颜色的信息函数
+print_message() {
+    echo -e "${GREEN}[INFO] $1${NC}"
+}
 
-echo "--------------------------------------------"
-echo "  Sprunkin 游戏平台 - 1Panel 部署脚本"
-echo "--------------------------------------------"
-echo "使用配置文件: $COMPOSE_FILE"
-echo ""
+print_error() {
+    echo -e "${RED}[ERROR] $1${NC}"
+}
 
-# 确认当前目录
-CURRENT_DIR=$(pwd)
-echo "当前目录: $CURRENT_DIR"
-echo ""
+print_warning() {
+    echo -e "${YELLOW}[WARNING] $1${NC}"
+}
 
-# 检查必要文件
-echo "检查必要文件..."
-if [ ! -f "Dockerfile" ]; then
-  echo "错误: Dockerfile 不存在!"
-  exit 1
-fi
+# 检查必要的命令是否存在
+check_commands() {
+    print_message "检查必要的命令..."
+    
+    commands=("git" "docker" "docker-compose")
+    for cmd in "${commands[@]}"; do
+        if ! command -v $cmd &> /dev/null; then
+            print_error "$cmd 未安装，正在安装..."
+            if [ "$cmd" = "git" ]; then
+                apt-get update && apt-get install -y git
+            elif [ "$cmd" = "docker" ]; then
+                curl -fsSL https://get.docker.com | sh
+                systemctl enable docker
+                systemctl start docker
+            elif [ "$cmd" = "docker-compose" ]; then
+                curl -L "https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                chmod +x /usr/local/bin/docker-compose
+            fi
+        fi
+    done
+}
 
-if [ ! -f "$COMPOSE_FILE" ]; then
-  echo "错误: $COMPOSE_FILE 不存在!"
-  exit 1
-fi
+# 创建项目目录
+setup_project_directory() {
+    print_message "创建项目目录..."
+    
+    PROJECT_DIR="/root/jx099"
+    if [ ! -d "$PROJECT_DIR" ]; then
+        mkdir -p "$PROJECT_DIR"
+    fi
+    cd "$PROJECT_DIR"
+    print_message "当前工作目录: $(pwd)"
+}
 
-if [ ! -f "package.json" ]; then
-  echo "错误: package.json 不存在!"
-  exit 1
-fi
-echo "✅ 所有必要文件存在"
-echo ""
+# 克隆或更新代码
+clone_or_update_code() {
+    print_message "克隆或更新代码..."
+    
+    if [ -d ".git" ]; then
+        print_message "Git仓库已存在，正在更新..."
+        git fetch origin
+        git reset --hard origin/main
+    else
+        print_message "克隆新仓库..."
+        git clone https://github.com/disowning/Sprunkin-Games-12.git .
+    fi
+}
 
-# 创建必要的目录
-echo "创建持久化数据目录..."
-mkdir -p uploads prisma
-chmod 777 uploads
-echo "✅ 数据目录已创建"
-echo ""
+# 创建环境文件
+create_env_file() {
+    print_message "创建环境配置文件..."
+    
+    cat > .env << 'EOL'
+DATABASE_URL="mysql://root:mysql_jYAwsS@207.211.179.194:3306/jx099?connection_limit=5&pool_timeout=2&charset=utf8mb4_unicode_ci&max_allowed_packet=16777216"
+NEXTAUTH_SECRET="8KQzp2nx893KJFmxnv6uqwerty12378HOPxmMs4"
+NEXTAUTH_URL="http://jx099.com"
+EOL
+    
+    print_message "环境配置文件创建完成"
+}
 
-# 检查 docker 和 docker-compose 是否安装
-echo "检查 Docker 环境..."
-if ! command -v docker &> /dev/null; then
-  echo "错误: Docker 未安装!"
-  exit 1
-fi
+# 创建 docker-compose 文件
+create_docker_compose() {
+    print_message "创建 docker-compose.yml 文件..."
+    
+    cat > docker-compose.yml << 'EOL'
+version: '3'
 
-if ! command -v docker-compose &> /dev/null; then
-  echo "错误: Docker Compose 未安装!"
-  exit 1
-fi
-echo "✅ Docker 环境正常"
-echo ""
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=mysql://root:mysql_jYAwsS@207.211.179.194:3306/jx099?connection_limit=5&pool_timeout=2&charset=utf8mb4_unicode_ci&max_allowed_packet=16777216
+      - NEXTAUTH_SECRET=8KQzp2nx893KJFmxnv6uqwerty12378HOPxmMs4
+      - NEXTAUTH_URL=http://jx099.com
+    volumes:
+      - ./public/uploads:/app/public/uploads
+    restart: always
+    networks:
+      - app-network
 
-# 确认部署参数
-echo "请确认部署参数:"
-echo "  • 数据库连接: $(grep DATABASE_URL $COMPOSE_FILE | cut -d= -f2)"
-echo "  • 域名: $(grep NEXTAUTH_URL $COMPOSE_FILE | cut -d= -f2)"
-echo ""
+networks:
+  app-network:
+    driver: bridge
+EOL
+    
+    print_message "docker-compose.yml 文件创建完成"
+}
 
-read -p "确认开始部署? (y/n): " confirm
-if [ "$confirm" != "y" ]; then
-  echo "部署已取消"
-  exit 0
-fi
-echo ""
+# 设置文件权限
+setup_permissions() {
+    print_message "设置文件权限..."
+    
+    chmod -R 755 .
+    chmod 644 .env docker-compose.yml
+    
+    if [ ! -d "public/uploads" ]; then
+        mkdir -p public/uploads
+    fi
+    chmod -R 777 public/uploads
+}
 
-# 停止并移除旧容器
-echo "停止并移除旧容器..."
-docker-compose -f $COMPOSE_FILE down
-echo "✅ 旧容器已移除"
-echo ""
+# 构建和启动 Docker 容器
+build_and_start_containers() {
+    print_message "构建和启动 Docker 容器..."
+    
+    # 停止并删除现有容器
+    if docker-compose ps | grep -q "jx099"; then
+        print_warning "检测到现有容器，正在停止..."
+        docker-compose down
+    fi
+    
+    # 清理 Docker 缓存
+    print_message "清理 Docker 缓存..."
+    docker system prune -f
+    
+    # 构建新镜像并启动容器
+    print_message "构建新镜像并启动容器..."
+    docker-compose up --build -d
+    
+    # 检查容器状态
+    if docker-compose ps | grep -q "Up"; then
+        print_message "容器启动成功！"
+    else
+        print_error "容器启动失败，请检查日志"
+        docker-compose logs
+        exit 1
+    fi
+}
 
-# 构建新镜像
-echo "构建新镜像..."
-docker-compose -f $COMPOSE_FILE build --no-cache
-if [ $? -ne 0 ]; then
-  echo "错误: 构建失败!"
-  exit 1
-fi
-echo "✅ 新镜像已构建"
-echo ""
+# 检查应用可访问性
+check_application() {
+    print_message "检查应用可访问性..."
+    
+    # 等待应用启动
+    sleep 10
+    
+    # 检查端口是否可访问
+    if curl -s "http://localhost:3000" > /dev/null; then
+        print_message "应用成功启动，可以通过 http://localhost:3000 访问"
+    else
+        print_warning "应用可能未正常启动，请检查日志"
+        docker-compose logs
+    fi
+}
 
-# 启动容器
-echo "启动容器..."
-docker-compose -f $COMPOSE_FILE up -d
-if [ $? -ne 0 ]; then
-  echo "错误: 启动失败!"
-  exit 1
-fi
-echo "✅ 容器已启动"
-echo ""
+# 主函数
+main() {
+    print_message "开始部署流程..."
+    
+    check_commands
+    setup_project_directory
+    clone_or_update_code
+    create_env_file
+    create_docker_compose
+    setup_permissions
+    build_and_start_containers
+    check_application
+    
+    print_message "部署完成！"
+    print_message "可以通过以下命令查看日志："
+    print_message "docker-compose logs -f"
+}
 
-# 等待容器启动
-echo "等待容器完全启动..."
-sleep 10
-
-# 初始化数据库
-echo "是否需要初始化数据库? (首次部署时需要)"
-read -p "初始化数据库? (y/n): " init_db
-if [ "$init_db" = "y" ]; then
-  echo "初始化数据库..."
-  
-  echo "正在生成 Prisma 客户端..."
-  docker exec -it jx099-nextjs npx prisma generate
-  
-  echo "正在应用数据库迁移..."
-  docker exec -it jx099-nextjs npx prisma db push
-  
-  echo "是否需要添加种子数据?"
-  read -p "添加种子数据? (y/n): " seed_db
-  if [ "$seed_db" = "y" ]; then
-    echo "正在添加种子数据..."
-    docker exec -it jx099-nextjs npx prisma db seed
-  fi
-  
-  echo "✅ 数据库初始化完成"
-fi
-echo ""
-
-# 检查容器状态
-echo "检查容器状态..."
-docker ps | grep jx099-nextjs
-echo ""
-
-# 检查容器日志
-echo "显示最近的容器日志..."
-docker logs --tail 20 jx099-nextjs
-echo ""
-
-echo "--------------------------------------------"
-echo "🎮 Sprunkin 游戏平台部署完成!"
-echo "--------------------------------------------"
-echo "现在，你可以通过以下地址访问你的游戏平台:"
-echo "$(grep NEXTAUTH_URL $COMPOSE_FILE | cut -d= -f2 | tr -d '[:space:]')"
-echo ""
-echo "请确保配置了正确的 Nginx 反向代理以及 SSL 证书。"
-echo "如有任何问题，请查看容器日志或联系技术支持。"
-echo ""
-
-exit 0 
+# 执行主函数
+main 
