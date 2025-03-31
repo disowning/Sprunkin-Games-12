@@ -2,16 +2,35 @@ version: '3'
 
 services:
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jx099-app
     ports:
       - "3000:3000"
     environment:
+      - NODE_ENV=production
       - DATABASE_URL=mysql://jx099.com:exir32ps7XATcFz8@1Panel-mysql-oh7c:3306/jx099.com
       - NEXTAUTH_SECRET=8KQzp2nx893KJFmxnv6uqwerty12378HOPxmMs4
       - NEXTAUTH_URL=http://jx099.com
     volumes:
       - ./public/uploads:/app/public/uploads
     restart: always
+    networks:
+      - app-network
+    depends_on:
+      - db-init
+
+  db-init:
+    image: node:18-alpine
+    container_name: jx099-db-init
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: >
+      sh -c "npm install && npx prisma generate && npx prisma db push"
+    environment:
+      - DATABASE_URL=mysql://jx099.com:exir32ps7XATcFz8@1Panel-mysql-oh7c:3306/jx099.com
     networks:
       - app-network
 
